@@ -1,0 +1,54 @@
+async (page) => {
+  const results=[];
+  const assert=(condition,message)=>{if(!condition)throw new Error(message);};
+  const check=async(name,fn)=>{try{await fn();results.push({name,pass:true});}catch(error){results.push({name,pass:false,error:String(error)});}};
+  const origin='http://127.0.0.1:3101';
+  await page.setViewportSize({width:1280,height:900});
+  await check('failed task drafts never overwrite a different task',async()=>{
+    await page.goto(`${origin}/tasks`);
+    await page.getByRole('button',{name:'Sửa bài tập Task A',exact:true}).click();
+    await page.getByLabel(/Tiêu đề bài tập/).fill('Draft A');
+    await page.getByRole('button',{name:'Lưu cập nhật',exact:true}).click();
+    await page.getByRole('alert').filter({hasText:'Lỗi thử nghiệm'}).waitFor();
+    assert(await page.getByLabel(/Tiêu đề bài tập/).inputValue()==='Draft A','failed title was lost');
+    await page.getByRole('button',{name:'Hủy',exact:true}).click();
+    await page.getByRole('button',{name:'Sửa bài tập Task B',exact:true}).click();
+    assert(await page.getByLabel(/Tiêu đề bài tập/).inputValue()==='Task B','draft from A leaked into B');
+  });
+  await check('failed save retains selected subject and status',async()=>{
+    await page.goto(`${origin}/tasks`);
+    await page.getByRole('button',{name:'Sửa bài tập Task A',exact:true}).click();
+    await page.getByRole('combobox',{name:'Môn học *',exact:true}).selectOption('22222222-2222-4222-8222-222222222222');
+    await page.getByRole('combobox',{name:'Trạng thái *',exact:true}).selectOption('done');
+    await page.getByRole('button',{name:'Lưu cập nhật',exact:true}).click();
+    await page.getByRole('alert').filter({hasText:'Lỗi thử nghiệm'}).waitFor();
+    assert(await page.getByRole('combobox',{name:'Môn học *',exact:true}).inputValue()==='22222222-2222-4222-8222-222222222222','subject reset');
+    assert(await page.getByRole('combobox',{name:'Trạng thái *',exact:true}).inputValue()==='done','status reset');
+  });
+  await check('modal traps Tab, handles Escape, restores focus',async()=>{
+    await page.goto(`${origin}/tasks`);
+    const opener=page.getByRole('button',{name:'Xóa bài tập Task A',exact:true});
+    await opener.click();
+    await page.waitForFunction(()=>document.querySelector('dialog:modal'));
+    assert(await page.evaluate(()=>Boolean(document.querySelector('dialog:modal')?.contains(document.activeElement))),'modal did not receive initial focus');
+    for(let i=0;i<8;i++){
+      await page.keyboard.press('Tab');
+      assert(await page.evaluate(()=>!document.hasFocus()||Boolean(document.querySelector('dialog:modal')?.contains(document.activeElement))),'focus reached background controls');
+    }
+    await page.keyboard.press('Escape');
+    assert(await page.getByRole('dialog').count()===0,'Escape failed to close modal');
+    assert(await opener.evaluate(element=>element===document.activeElement),'focus was not restored');
+  });
+  await check('closed mobile sidebar is hidden from keyboard and screen reader',async()=>{
+    await page.setViewportSize({width:390,height:844});
+    await page.goto(`${origin}/tasks`);
+    assert(await page.locator('.student-sidebar').evaluate(element=>getComputedStyle(element).visibility)==='hidden','closed sidebar remains focusable offscreen');
+    await page.getByRole('button',{name:'Mở menu điều hướng',exact:true}).click();
+    assert(await page.locator('.student-sidebar').evaluate(element=>getComputedStyle(element).visibility)==='visible','opened sidebar not visible');
+    await page.getByRole('link',{name:'Môn học',exact:true}).click();
+    await page.getByRole('heading',{name:'Quản lý môn học',exact:true}).waitFor();
+    assert(await page.locator('.student-sidebar').evaluate(element=>getComputedStyle(element).visibility)==='hidden','sidebar remained open after navigation');
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'mobile overflow');
+  });
+  return {passed:results.filter(result=>result.pass).length,total:results.length,results};
+}
