@@ -4,6 +4,7 @@ import { useActionState, useEffect, useRef, useState } from 'react';
 import { mutateStudentData } from '@/app/(student)/actions';
 import type { ActionState, Subject } from '@/lib/types';
 import { Modal } from './modal';
+import { SUBJECT_COLORS } from '@/lib/colors';
 import { LoadingIndicator } from './loading-indicator';
 import { IconClose } from './icons';
 
@@ -13,17 +14,7 @@ interface SubjectModalProps {
   subject?: Subject | null;
 }
 
-// Each preset keeps white badge text at WCAG AA (≥4.5:1).
-const COLOR_PRESETS = [
-  '#0f766e', // Teal
-  '#1d4ed8', // Blue
-  '#6d28d9', // Violet
-  '#be185d', // Pink
-  '#b91c1c', // Red
-  '#b45309', // Amber
-  '#15803d', // Green
-  '#475569', // Slate
-];
+const COLOR_PRESETS = SUBJECT_COLORS;
 
 export function SubjectModal(props: SubjectModalProps) {
   return props.isOpen ? <SubjectModalContent key={props.subject?.id ?? 'new'} {...props}/> : null;

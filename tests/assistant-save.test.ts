@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import type {SupabaseClient} from '@supabase/supabase-js';
-import {saveAssistantRecord,processAssistantRequest} from '../src/lib/assistant-service.ts';
+import {saveAssistantRecord,processAssistantRequest,seriesSessionId} from '../src/lib/assistant-service.ts';
 import {parseAssistantReply} from '../src/lib/assistant.ts';
 import type {Subject} from '../src/lib/types.ts';
 
@@ -13,7 +13,7 @@ const parsed=parseAssistantReply(reply,subjects);
 if(parsed.type!=='create')throw new Error('Invalid fixture');
 const command=parsed.command;
 function database(fail=false,loseFirstResponse=false) {
-  const rows:Record<string,Record<string,unknown>[]>= {tasks:[],class_sessions:[]};
+  const rows:Record<string,Record<string,unknown>[]>= {tasks:[],class_sessions:[],subjects:[]};
   let writes=0;
   // Stand-in for public.take_assistant_quota(): 10 per window; the real window logic is tested in SQL.
   const quota={used:0,error:false as boolean};
@@ -25,7 +25,17 @@ function database(fail=false,loseFirstResponse=false) {
     const filters:Record<string,unknown>={};let payload:Record<string,unknown>|undefined;
     const query={
       select(){return query;},eq(key:string,value:unknown){filters[key]=value;return query;},
-      insert(value:Record<string,unknown>){payload=value;return query;},
+      insert(value:Record<string,unknown>|Record<string,unknown>[]){
+        if(Array.isArray(value)) { // batch insert, resolved when the query is awaited
+          return {select:()=>({then(resolve:(result:unknown)=>void){
+            writes++;
+            if(value.some(row=>rows[table].some(existing=>existing.id===row.id)))return resolve({data:null,error:{code:'23505'}});
+            rows[table].push(...value.map(row=>({...row})));
+            resolve({data:value.map(row=>({id:row.id})),error:null});
+          }})};
+        }
+        payload=value;return query;
+      },
       async maybeSingle(){return {data:rows[table].find(row=>Object.entries(filters).every(([key,value])=>row[key]===value))??null,error:null};},
       async single(){
         writes++;
@@ -111,4 +121,50 @@ test('retry recovers a committed insert after lost response without regenerating
   assert.equal(recovered.created?.id,requestId);
   assert.equal(calls,1);
   assert.equal(db.writes,1);
+});
+
+test('assistant creates a missing subject once and a weekly series without duplicates on retry',async()=>{
+  const db=database();
+  const id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const series=parseAssistantReply({type:'class_series',subject_id:null,subject_name:' Tiếng   Anh ',weekdays:[3,5],start_time:'06:45',end_time:'08:15',first_date:'2026-11-16',until_date:'',location:''},subjects,id);
+  if(series.type!=='create'||series.command.entity!=='class_series')throw new Error('Bad fixture');
+  assert.equal(series.command.newSubject,'Tiếng Anh');
+  assert.equal(series.command.values.subject_id,id);
+  assert.equal(series.command.values.to,'2027-02-28'); // default 15 weeks from 16/11
+  assert.equal(series.command.sessions.length,30);
+  assert.equal(series.command.sessions[0].starts_at,'2026-11-17T23:45:00.000Z'); // Wed 18/11 06:45 VN
+  const first=await saveAssistantRecord(db.client,'owner-a',id,series.command,1);
+  assert.equal(first,seriesSessionId(id,0));
+  assert.equal(await saveAssistantRecord(db.client,'owner-a',id,series.command,1),first);
+  assert.equal(db.rows.subjects.length,1);
+  assert.equal(db.rows.subjects[0].name,'Tiếng Anh');
+  assert.equal(db.rows.subjects[0].user_id,'owner-a');
+  assert.equal(db.rows.class_sessions.length,30);
+  assert.equal(new Set(db.rows.class_sessions.map(row=>row.id)).size,30);
+  assert.ok(db.rows.class_sessions.every(row=>row.user_id==='owner-a'&&row.subject_id===id));
+});
+
+test('assistant reuses existing subjects by name or code and asks again for unclear series',async()=>{
+  const id='cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const coded=[...subjects,{...subjects[0],id:'dddddddd-dddd-4ddd-8ddd-dddddddddddd',name:'Tiếng Anh',code:'ENG'}];
+  for(const subject_name of ['toán','  TOÁN ','eng']) {
+    const parsed=parseAssistantReply({...reply,subject_id:null,subject_name},coded,id);
+    assert.ok(parsed.type==='create'&&!parsed.command.newSubject&&parsed.command.values.subject_id!==id);
+  }
+  const base={type:'class_series',subject_id:subjectId,subject_name:'',weekdays:[3],start_time:'06:45',end_time:'08:15',first_date:'2026-11-16',until_date:'',location:''};
+  for(const bad of [{...base,end_time:''},{...base,weekdays:[]},{...base,weekdays:[8]},{...base,first_date:''},{...base,until_date:'2027-12-31'},{...base,end_time:'06:00'}])
+    assert.throws(()=>parseAssistantReply(bad,subjects,id));
+  assert.throws(()=>parseAssistantReply({...reply,subject_id:null,subject_name:'Môn mới'},subjects)); // no request id
+  assert.throws(()=>parseAssistantReply({...reply,subject_id:null,subject_name:''},subjects,id));
+});
+
+test('assistant works with no subjects yet by creating the named one',async()=>{
+  const db=database();
+  const input={requestId,messages:[{role:'user',text:'Thêm deadline Tiếng Anh ngày mai 23h'}]};
+  const result=await processAssistantRequest(input,async()=>({client:db.client,userId:'owner-new',subjects:[]}),
+    async()=>({type:'task',subject_id:null,subject_name:'Tiếng Anh',title:'Bài tập',due_at:'2026-11-17T23:00'}));
+  assert.equal(result.ok,true);
+  assert.match(result.message,/đã tạo môn mới “Tiếng Anh”/);
+  assert.equal(db.rows.subjects[0].id,requestId);
+  assert.equal(db.rows.tasks[0].subject_id,requestId);
 });
