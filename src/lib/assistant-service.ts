@@ -1,14 +1,23 @@
 import type {SupabaseClient} from '@supabase/supabase-js';
 import {AssistantError,parseAssistantReply,requestAssistant,validateAssistantInput} from './assistant.ts';
-import type {AssistantCommand} from './assistant.ts';
+import type {AssistantCommand,ScheduleItem} from './assistant.ts';
 import type {AssistantState,Subject} from './types.ts';
 import {formatDateTime} from './study.ts';
 
-type Context={client:SupabaseClient;userId:string;subjects:Subject[]};
-// shortcut: process-local quotas/deduplication serve local use; add shared storage before multi-instance deployment.
-const limits=new Map<string,{count:number;expires:number}>();
+type Context={client:SupabaseClient;userId:string;subjects:Subject[];schedule?:ScheduleItem[]};
+// The in-process cache only spares Gemini calls on same-instance retries; duplicates are prevented by the request-id
+// check in saveAssistantRecord, and the quota lives in Postgres (take_assistant_quota), so both hold across instances.
 type RequestEntry={fingerprint:string;expires:number;result?:Promise<AssistantState>;command?:AssistantCommand};
 const requests=new Map<string,RequestEntry>();
+
+export const QUOTA_MESSAGE='Bạn đã gửi 10 yêu cầu trong một phút. Hãy chờ một chút rồi thử lại.';
+/** Shared per-user Gemini quota (10 calls per minute) kept in Postgres. Fails closed when it cannot be checked. */
+export async function takeQuota(client:SupabaseClient):Promise<boolean> {
+  try {
+    const {data,error}=await client.rpc('take_assistant_quota');
+    return !error&&data===true;
+  } catch {return false;}
+}
 
 export async function saveAssistantRecord(client:SupabaseClient,userId:string,requestId:string,command:AssistantCommand):Promise<string> {
   const table=command.entity==='task'?'tasks':'class_sessions';
@@ -36,27 +45,26 @@ export async function saveAssistantRecord(client:SupabaseClient,userId:string,re
 }
 
 export async function processAssistantRequest(input:unknown,authenticate:()=>Promise<Context>,requester:typeof requestAssistant=requestAssistant,now=new Date()):Promise<AssistantState> {
-  const {client,userId,subjects}=await authenticate();
+  const {client,userId,subjects,schedule=[]}=await authenticate();
   let validated:ReturnType<typeof validateAssistantInput>;
   try {validated=validateAssistantInput(input);}
   catch(error){return {ok:false,message:error instanceof Error?error.message:'Yêu cầu không hợp lệ.'};}
   const {requestId,messages}=validated;
   const time=now.getTime();
-  for(const [key,entry] of limits)if(entry.expires<=time)limits.delete(key);
   for(const [key,entry] of requests)if(entry.expires<=time)requests.delete(key);
   const key=`${userId}:${requestId}`;
   const fingerprint=JSON.stringify(messages);
   const previous=requests.get(key);
   if(previous&&previous.fingerprint!==fingerprint)return {ok:false,message:'Yêu cầu đã thay đổi. Hãy gửi thành một tin nhắn mới.'};
   if(previous?.result)return previous.result;
-  const quota=limits.get(userId)??{count:0,expires:time+60000};
-  if(quota.count>=10)return {ok:false,message:'Bạn đã gửi 10 yêu cầu trong một phút. Hãy chờ một chút rồi thử lại.'};
-  quota.count++;limits.set(userId,quota);
   const entry:RequestEntry=previous??{fingerprint,expires:time+600000};
   const result=(async():Promise<AssistantState>=>{
     if(subjects.length===0)return {ok:true,message:'Bạn hãy tạo môn học trước trong mục Môn học, rồi mình sẽ thêm lịch hoặc deadline cho môn đó.'};
+    // Checked after the entry is registered so concurrent duplicates share one quota slot and one Gemini call;
+    // retries that reuse a validated command do not call Gemini and do not spend quota.
+    if(!entry.command&&!await takeQuota(client))return {ok:false,message:QUOTA_MESSAGE};
     let parsed:ReturnType<typeof parseAssistantReply>;
-    try {parsed=entry.command?{type:'create',command:entry.command}:parseAssistantReply(await requester(messages,subjects,now),subjects);}
+    try {parsed=entry.command?{type:'create',command:entry.command}:parseAssistantReply(await requester(messages,subjects,now,fetch,schedule),subjects);}
     catch(error) {return {ok:false,message:error instanceof AssistantError?error.message:'Gemini trả thông tin chưa hợp lệ. Hãy bổ sung rõ môn, ngày và giờ rồi thử lại.'};}
     if(parsed.type==='reply')return {ok:true,message:parsed.message};
     entry.command=parsed.command;

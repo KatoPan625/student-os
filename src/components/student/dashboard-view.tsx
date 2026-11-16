@@ -7,6 +7,7 @@ import type { StudentData, Subject } from '@/lib/types';
 import { TaskModal } from './task-modal';
 import { SessionModal } from './session-modal';
 import { SubjectModal } from './subject-modal';
+import { FocusTimer } from './focus-timer';
 import {
   IconPlus,
   IconCalendar,
@@ -102,6 +103,46 @@ export function DashboardView({ data }: DashboardViewProps) {
         </div>
       </section>
 
+      {/* Next up + focus timer */}
+      <div className="dashboard-grid">
+        <section className="card" aria-labelledby="next-tasks-title">
+          <div className="card-header">
+            <h2 id="next-tasks-title" className="card-title">
+              <IconTasks />
+              <span>Nên làm tiếp</span>
+            </h2>
+            <Link href="/tasks" className="btn btn-ghost btn-sm">
+              <span>Kanban</span>
+              <IconArrowRight />
+            </Link>
+          </div>
+          {dashboard.nextTasks.length === 0 ? (
+            <p className="empty-desc">Không còn bài tập chưa xong. Thêm bài mới khi có deadline.</p>
+          ) : (
+            <ol className="next-list">
+              {dashboard.nextTasks.map((task) => {
+                const subject = subjectMap.get(task.subject_id);
+                const overdue = dashboard.overdueTasks.some((late) => late.id === task.id);
+                return (
+                  <li key={task.id} className="next-item">
+                    <span className="next-dot" style={{ backgroundColor: subject?.color || '#475569' }} aria-hidden="true" />
+                    <div className="item-info">
+                      <span className="item-title">{task.title}</span>
+                      <span className="item-meta">
+                        {subject?.name ?? 'Môn học'} · {formatDateTime(task.due_at)}
+                      </span>
+                    </div>
+                    {overdue ? <span className="badge badge-overdue">Quá hạn</span>
+                      : task.priority === 'high' ? <span className="badge badge-doing">Ưu tiên cao</span> : null}
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </section>
+        <FocusTimer subjects={data.subjects} />
+      </div>
+
       {/* Dashboard Two-Column Grid */}
       <div className="dashboard-grid">
         {/* Left Column: Today's Schedule & Overdue Tasks */}
@@ -144,7 +185,7 @@ export function DashboardView({ data }: DashboardViewProps) {
                       <div className="item-left">
                         <span
                           className="badge badge-subject"
-                          style={{ backgroundColor: subject?.color || 'var(--charcoal)' }}
+                          style={{ backgroundColor: subject?.color || '#475569' }}
                         >
                           {subject?.code || subject?.name || 'Môn'}
                         </span>
@@ -198,7 +239,7 @@ export function DashboardView({ data }: DashboardViewProps) {
                       <div className="item-left">
                         <span
                           className="badge badge-subject"
-                          style={{ backgroundColor: subject?.color || 'var(--status-overdue-text)' }}
+                          style={{ backgroundColor: subject?.color || '#475569' }}
                         >
                           {subject?.code || subject?.name || 'Môn'}
                         </span>
@@ -262,7 +303,7 @@ export function DashboardView({ data }: DashboardViewProps) {
                       <div className="item-left">
                         <span
                           className="badge badge-subject"
-                          style={{ backgroundColor: subject?.color || 'var(--charcoal)' }}
+                          style={{ backgroundColor: subject?.color || '#475569' }}
                         >
                           {subject?.code || subject?.name || 'Môn'}
                         </span>
@@ -323,7 +364,7 @@ export function DashboardView({ data }: DashboardViewProps) {
                             width: '8px',
                             height: '8px',
                             borderRadius: '50%',
-                            backgroundColor: subject.color || 'var(--brown)',
+                            backgroundColor: subject.color || 'var(--primary)',
                             display: 'inline-block',
                           }}
                         />
@@ -335,6 +376,7 @@ export function DashboardView({ data }: DashboardViewProps) {
                         ) : (
                           `${done}/${total} bài (${percent}%)`
                         )}
+                        {dashboard.weekFocusMinutes.get(subject.id) ? ` · ${dashboard.weekFocusMinutes.get(subject.id)} phút tuần này` : ''}
                       </span>
                     </div>
 
@@ -350,7 +392,7 @@ export function DashboardView({ data }: DashboardViewProps) {
                         className="progress-fill"
                         style={{
                           width: `${percent ?? 0}%`,
-                          backgroundColor: subject.color || 'var(--brown)',
+                          backgroundColor: subject.color || 'var(--primary)',
                         }}
                       />
                     </div>

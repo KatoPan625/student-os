@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { getMonthDays, localDateKey, toUtc, formatDateTime } from '@/lib/study';
 import type { StudentData, Subject, ClassSession, Task } from '@/lib/types';
 import { SessionModal } from './session-modal';
+import { TimetableImportModal } from './timetable-import-modal';
 import { TaskModal } from './task-modal';
 import { ConfirmModal } from './confirm-modal';
 import {
@@ -48,6 +49,7 @@ export function CalendarView({ data }: CalendarViewProps) {
   const [editingSession, setEditingSession] = useState<ClassSession | null>(null);
   const [deletingSession, setDeletingSession] = useState<ClassSession | null>(null);
 
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [deletingTask, setDeletingTask] = useState<Task | null>(null);
@@ -146,6 +148,12 @@ export function CalendarView({ data }: CalendarViewProps) {
             <IconPlus />
             <span>Thêm bài tập</span>
           </button>
+          <button type="button" className="btn btn-secondary" onClick={() => setIsImportOpen(true)}>
+            <span>Nhập TKB từ ảnh</span>
+          </button>
+          <a className="btn btn-secondary" href="/calendar.ics" download>
+            <span>Tải lịch (.ics)</span>
+          </a>
         </div>
       </header>
 
@@ -336,7 +344,7 @@ export function CalendarView({ data }: CalendarViewProps) {
                         <div className="item-left">
                           <span
                             className="badge badge-subject"
-                            style={{ backgroundColor: sub?.color || 'var(--charcoal)' }}
+                            style={{ backgroundColor: sub?.color || '#475569' }}
                           >
                             {sub?.code || sub?.name || 'Môn'}
                           </span>
@@ -400,7 +408,7 @@ export function CalendarView({ data }: CalendarViewProps) {
                         <div className="item-left">
                           <span
                             className="badge badge-subject"
-                            style={{ backgroundColor: sub?.color || 'var(--brown)' }}
+                            style={{ backgroundColor: sub?.color || '#475569' }}
                           >
                             {sub?.code || sub?.name || 'Môn'}
                           </span>
@@ -461,6 +469,10 @@ export function CalendarView({ data }: CalendarViewProps) {
       </div>
 
       {/* Session Modal */}
+      {isImportOpen && (
+        <TimetableImportModal subjects={data.subjects} onClose={() => setIsImportOpen(false)} />
+      )}
+
       <SessionModal
         isOpen={isSessionModalOpen}
         onClose={() => {

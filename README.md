@@ -37,9 +37,19 @@ Khởi động lại server sau khi điền key. Với bản production local: d
 
 Mở “Trợ lý học tập” sau đăng nhập, nhập ví dụ “Thêm deadline bài tập Toán ngày 24/10/2026 lúc 23h” hoặc “Thêm buổi học Toán ngày mai từ 8h đến 10h ở B203”. Môn phải được tạo trước. Mỗi lượt thêm một lịch hoặc deadline; thiếu thông tin sẽ hỏi lại. Kết quả ghi thành công mới cập nhật lịch/Kanban/dashboard. Khi lỗi chưa xác nhận lưu, dùng nút Thử lại cùng yêu cầu để kiểm tra, tránh tự tạo thêm bản khác.
 
-Nội dung hội thoại ngắn cùng id/tên/mã môn của tài khoản được gửi tới Google Gemini để xử lý; không gửi email, token hay toàn bộ lịch/bài tập cũ. Chat chỉ giữ trong bộ nhớ tab. Gemini có thể hiểu sai ngày/giờ: kiểm tra thông tin đã tạo và sửa bằng biểu mẫu nếu cần. Không hỗ trợ sửa/xóa bằng chat, nhiều bản ghi trong một lượt hoặc lịch lặp.
+Nội dung hội thoại ngắn, id/tên/mã môn và **lịch 14 ngày tới** được gửi tới Google Gemini để xử lý. Lịch gồm tối đa 40 mục: deadline chưa xong đã quá hạn, deadline và buổi học trong 14 ngày (tên bài, môn, giờ, trạng thái, phòng); không gửi mô tả bài tập, id bản ghi, email hay token. Nhờ vậy có thể hỏi “Tuần này có gì?”, “Môn nào sắp trễ hạn?”; câu trả lời chỉ dựa trên danh sách đó. Chat chỉ giữ trong bộ nhớ tab. Gemini có thể hiểu sai ngày/giờ: kiểm tra thông tin đã tạo và sửa bằng biểu mẫu nếu cần. Không hỗ trợ sửa/xóa bằng chat, nhiều bản ghi trong một lượt hoặc lịch lặp.
 
-Giới hạn bản local: 2.000 ký tự/tin, 8 lượt ngữ cảnh, 10 yêu cầu/phút/tài khoản và timeout Gemini 20 giây. Rate limit và cache chống lặp dùng bộ nhớ process; cần shared limiter/deduplication trước khi deploy nhiều instance. Hạn mức/chi phí Gemini phụ thuộc project/key của bạn; không tự bật billing hay tạo tài nguyên trả phí.
+Giới hạn bản local: 2.000 ký tự/tin, 8 lượt ngữ cảnh, 10 yêu cầu/phút/tài khoản và timeout Gemini 20 giây. Hạn mức 10 yêu cầu/phút dùng chung cho chatbot và nhập TKB, lưu trong Postgres (`take_assistant_quota`, migration `202611160003_assistant_quota.sql`) nên đúng cả khi chạy nhiều instance; không kiểm tra được hạn mức thì từ chối gọi Gemini. Chống tạo trùng dựa trên mã yêu cầu trong database; cache trong process chỉ giúp thử lại không gọi Gemini lần nữa. Hạn mức/chi phí Gemini phụ thuộc project/key của bạn; không tự bật billing hay tạo tài nguyên trả phí.
+
+## Deploy lên Vercel
+
+1. Chạy theo thứ tự ba migration `202611160001…`, `…0002…`, `…0003…` trên project Supabase (đã chạy trên project hiện tại).
+2. Tạo project Vercel nối với repo GitHub; framework Next.js, Node 24. Production build từ nhánh `main`.
+3. Biến môi trường (Production và Preview): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_SITE_URL` (origin HTTPS của bản production, không có dấu `/` cuối), `GEMINI_MODEL` (tùy chọn). `GEMINI_API_KEY` tự nhập trong Vercel Dashboard, kiểu Sensitive, không đưa qua chat/Git.
+4. Supabase → Authentication → URL Configuration: Site URL = origin production; thêm redirect `https://<domain>/auth/callback` và `https://<domain>/auth/callback?next=/reset-password`. Giữ các URL local nếu còn chạy trên máy.
+5. Đổi biến `NEXT_PUBLIC_*` thì phải deploy lại (giá trị được nhúng lúc build).
+
+`next.config.ts` thêm header bảo mật cơ bản (nosniff, chặn nhúng iframe, Referrer-Policy, Permissions-Policy); chưa có CSP. CI GitHub Actions chạy test, lint, typecheck và build cho mỗi PR và khi push lên `main`.
 
 ## Kiểm tra
 
@@ -78,4 +88,19 @@ Kiểm tra thủ công thêm: đăng ký/xác nhận email/reset mật khẩu, p
 
 Brief: `docs/ANTIGRAVITY.md`. Antigravity sở hữu `src/components/student/**` và `src/app/globals.css`; Codex sở hữu backend/auth/routes/config/test. Không sửa cùng file trong lúc bên kia đang làm. Không tự commit, push hoặc deploy.
 
-Chưa làm trong MVP: Pomodoro, ghi chú, email/Zalo nhắc deadline, lịch học lặp, kéo thả Kanban và quản lý nhóm.
+## Lịch lặp, nhập thời khóa biểu và xuất lịch
+
+- **Lặp hằng tuần:** khi tạo buổi học, điền “Lặp hằng tuần đến ngày” để tạo một buổi mỗi tuần cùng giờ, tối đa 26 tuần. Các buổi được tạo trong một lần ghi và là bản ghi độc lập; sửa/xóa vẫn theo từng buổi.
+- **Nhập TKB từ ảnh:** trang Lịch học → “Nhập TKB từ ảnh”. Chọn ngày bắt đầu/kết thúc học kỳ và ảnh; trình duyệt thu nhỏ ảnh (dưới giới hạn 1 MB của Server Action) rồi gửi tới Gemini. Môn không khớp hoặc giờ chỉ ghi “tiết” sẽ để trống để bạn chọn/điền trước khi lưu. Cần `GEMINI_API_KEY`; dùng chung hạn mức 10 yêu cầu/phút với chatbot. Ảnh không được lưu.
+- **Xuất .ics:** nút “Tải lịch (.ics)” tải `/calendar.ics` gồm buổi học và deadline chưa xong, để nhập vào Google Calendar/lịch điện thoại. Đây là file tải một lần (cần đăng nhập), chưa phải link đăng ký tự cập nhật.
+
+## Ưu tiên, gợi ý, kéo thả và Pomodoro
+
+**Cần chạy migration `supabase/migrations/202611160001_priority_focus.sql` một lần** (SQL Editor) trước khi chạy bản này: nó thêm cột `tasks.priority` (mặc định `normal`) và bảng `focus_sessions` có RLS. Migration chỉ thêm, không sửa/xóa dữ liệu cũ. Chưa chạy migration thì trang sau đăng nhập báo lỗi tải dữ liệu.
+
+- **Độ ưu tiên:** Cao/Bình thường/Thấp trong form bài tập; thẻ Kanban hiện “Ưu tiên cao”.
+- **Nên làm tiếp:** dashboard chọn 3 bài chưa xong: quá hạn trước, sau đó theo hạn nộp, bài ưu tiên cao được tính sớm hơn 2 ngày, thấp muộn hơn 2 ngày.
+- **Kéo thả Kanban:** kéo thẻ sang cột khác để đổi trạng thái; lỗi lưu thì thẻ quay về chỗ cũ. Trên điện thoại/bàn phím dùng các nút trạng thái trên thẻ.
+- **Phiên tập trung (Pomodoro):** chọn môn, 25 hoặc 50 phút; hết giờ hoặc “Kết thúc & lưu” sẽ ghi số phút (phiên dưới 1 phút không ghi). Lưu lỗi thì có nút thử lại. Tiến độ môn hiện số phút tập trung từ thứ Hai tuần này. Đồng hồ chạy trong trang Tổng quan; rời trang khi đang chạy sẽ mất phiên đó. Lịch sử phiên bị xóa cùng môn học.
+
+Chưa làm: ghi chú, email/Zalo nhắc deadline, xóa cả chuỗi lịch lặp, link đăng ký lịch tự cập nhật, thời gian ước tính cho bài tập và quản lý nhóm.

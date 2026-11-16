@@ -16,3 +16,18 @@ export async function sendAssistantMessage(input:{requestId:string;messages:Assi
   if(text.includes('24/10/2026'))return {ok:true,message:'Fixture: đã thêm deadline Toán lúc 23h ngày 24/10/2026. Không ghi database thật.',created:{entity:'task',id:input.requestId}};
   return {ok:true,message:'Bạn muốn đặt deadline vào ngày nào, lúc mấy giờ? (Fixture, không gọi Gemini thật)'};
 }
+export async function readTimetableImage():Promise<{ok:boolean;message:string;rows?:import('../../src/lib/timetable').TimetableRow[]}> {
+  await new Promise(resolve=>setTimeout(resolve,800));
+  return {ok:true,message:'Fixture: đọc được 2 buổi/tuần (không gọi Gemini thật).',rows:[
+    {label:'Môn A',subject_id:'11111111-1111-4111-8111-111111111111',weekday:1,start:'07:30',end:'09:30',location:'B203'},
+    {label:'Môn lạ trong ảnh',subject_id:'',weekday:6,start:'',end:'',location:''},
+  ]};
+}
+export async function saveTimetable():Promise<ActionState> {
+  await new Promise(resolve=>setTimeout(resolve,30));
+  return {ok:false,message:'Lỗi thử nghiệm: chưa lưu dữ liệu.'};
+}
+export async function logFocusSession():Promise<ActionState> {
+  await new Promise(resolve=>setTimeout(resolve,30));
+  return {ok:false,message:'Lỗi thử nghiệm: chưa lưu phiên tập trung.'};
+}

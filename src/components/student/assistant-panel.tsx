@@ -54,7 +54,7 @@ export function AssistantPanel() {
     </button>
     {open&&<section id="student-assistant" className="assistant-panel" role="dialog" aria-labelledby="assistant-title" onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();close();}}}>
       <header className="assistant-header"><div><h2 id="assistant-title">Trợ lý học tập</h2><small>Gemini · Giờ Việt Nam</small></div><button type="button" className="assistant-close" aria-label="Đóng trợ lý" onClick={close}><IconClose/></button></header>
-      <p className="assistant-privacy">Tin nhắn và tên/mã môn được gửi tới Gemini. Mỗi lượt thêm một lịch hoặc deadline.</p>
+      <p className="assistant-privacy">Tin nhắn, tên/mã môn và lịch 14 ngày tới được gửi tới Gemini. Hỏi “Tuần này có gì?” hoặc thêm một lịch/deadline mỗi lượt.</p>
       <div ref={log} className="assistant-messages" role="log" aria-label="Hội thoại với trợ lý" aria-live="polite" aria-busy={pending}>
         {messages.length===0&&<div className="assistant-message assistant"><p>Bạn muốn thêm lịch học hay deadline? Hãy ghi rõ môn, ngày và giờ.</p><p>Ví dụ: “Thêm buổi học Toán ngày mai từ 8h đến 10h ở B203”.</p></div>}
         {messages.map((message,index)=><div key={index} className={`assistant-message ${message.role}`}><span className="sr-only">{message.role==='user'?'Bạn: ':'Trợ lý: '}</span><p>{message.text}</p>{message.created&&<div className="assistant-result"><Link href={message.created.entity==='task'?'/tasks':'/calendar'}>Xem {message.created.entity==='task'?'bài tập':'lịch học'} →</Link></div>}</div>)}

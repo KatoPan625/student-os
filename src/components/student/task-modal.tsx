@@ -148,6 +148,15 @@ function TaskModalContent({
           </div>
 
           <label className="form-field">
+            <span>Độ ưu tiên</span>
+            <select name="priority" defaultValue={state.values?.priority || task?.priority || 'normal'}>
+              <option value="high">Cao — đưa lên đầu gợi ý</option>
+              <option value="normal">Bình thường</option>
+              <option value="low">Thấp</option>
+            </select>
+          </label>
+
+          <label className="form-field">
             <span>Ghi chú / Mô tả <small style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(tùy chọn)</small></span>
             <textarea
               name="description"

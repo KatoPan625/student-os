@@ -31,6 +31,20 @@ export function getMonthDays(year: number, month: number): string[] {
   return Array.from({length: Math.ceil((offset + days) / 7) * 7}, (_, index) =>
     new Date(Date.UTC(year, month - 1, 1 - offset + index)).toISOString().slice(0, 10));
 }
+const PRIORITY_SHIFT = {high: -2 * 86400000, normal: 0, low: 2 * 86400000};
+/** Lower is more urgent: overdue first, then by deadline with high priority pulled 2 days earlier and low pushed 2 days later. */
+function urgency(task: {due_at: string; priority?: 'low' | 'normal' | 'high'}, now: number): number {
+  const due = Date.parse(task.due_at);
+  return due < now ? due - 1e15 : due + PRIORITY_SHIFT[task.priority ?? 'normal'];
+}
+/** Focus minutes per subject since the given instant (start of the Vietnam week on dashboards). */
+function focusSince(data: StudentData, since: number): Map<string, number> {
+  const minutes = new Map<string, number>();
+  for (const session of data.focusSessions ?? []) {
+    if (Date.parse(session.started_at) >= since) minutes.set(session.subject_id, (minutes.get(session.subject_id) ?? 0) + session.minutes);
+  }
+  return minutes;
+}
 export function getDashboard(data: StudentData, now: Date) {
   const instant = now.getTime();
   const dayStart = Date.parse(toUtc(`${localDateKey(now.toISOString())}T00:00`));
@@ -41,10 +55,33 @@ export function getDashboard(data: StudentData, now: Date) {
       .sort((a,b) => Date.parse(a.starts_at) - Date.parse(b.starts_at)),
     overdueTasks: active.filter(task => Date.parse(task.due_at) < instant).sort(byDeadline),
     upcomingTasks: active.filter(task => Date.parse(task.due_at) >= instant && Date.parse(task.due_at) < instant + 7 * 86400000).sort(byDeadline),
+    nextTasks: [...active].sort((a, b) => urgency(a, instant) - urgency(b, instant)).slice(0, 3),
+    weekFocusMinutes: focusSince(data, dayStart - ((new Date(dayStart + 7 * 3600000).getUTCDay() + 6) % 7) * 86400000),
     progress: data.subjects.map(subject => {
       const tasks = data.tasks.filter(task => task.subject_id === subject.id);
       const done = tasks.filter(task => task.status === 'done').length;
       return { subject, done, total: tasks.length, percent: tasks.length ? Math.round(done / tasks.length * 100) : null };
     }),
   };
+}
+
+export const MAX_REPEAT_WEEKS = 26;
+const WEEK = 7 * 86400000; // Vietnam has no DST, so a week is always exactly 7×24h.
+export function weeklySessions(starts_at: string, ends_at: string, untilKey: string): {starts_at: string; ends_at: string}[] {
+  const start = Date.parse(starts_at), length = Date.parse(ends_at) - start;
+  const last = Date.parse(toUtc(`${untilKey}T23:59`));
+  if (!Number.isFinite(start) || !(length > 0)) throw new Error('Giờ kết thúc phải sau giờ bắt đầu.');
+  if (last < start) throw new Error('Ngày kết thúc lặp phải từ ngày của buổi đầu tiên trở đi.');
+  const sessions: {starts_at: string; ends_at: string}[] = [];
+  for (let at = start; at <= last; at += WEEK) {
+    if (sessions.length === MAX_REPEAT_WEEKS) throw new Error(`Chỉ lặp tối đa ${MAX_REPEAT_WEEKS} tuần.`);
+    sessions.push({starts_at: new Date(at).toISOString(), ends_at: new Date(at + length).toISOString()});
+  }
+  return sessions;
+}
+/** ISO weekday: 1 = Thứ Hai … 7 = Chủ Nhật. */
+export function firstWeekdayOnOrAfter(dateKey: string, weekday: number): string {
+  const date = new Date(`${dateKey}T00:00:00Z`);
+  const offset = (weekday - ((date.getUTCDay() + 6) % 7 + 1) + 7) % 7;
+  return new Date(date.getTime() + offset * 86400000).toISOString().slice(0, 10);
 }

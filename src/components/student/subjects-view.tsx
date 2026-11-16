@@ -77,7 +77,7 @@ export function SubjectsView({ data }: SubjectsViewProps) {
               <article key={sub.id} className="subject-card">
                 <div
                   className="subject-card-bar"
-                  style={{ backgroundColor: sub.color || 'var(--brown)' }}
+                  style={{ backgroundColor: sub.color || 'var(--primary)' }}
                 />
 
                 <div className="subject-card-header">
@@ -91,7 +91,7 @@ export function SubjectsView({ data }: SubjectsViewProps) {
                       height: '14px',
                       borderRadius: '50%',
                       backgroundColor: sub.color,
-                      border: '2px solid #ffffff',
+                      border: '2px solid var(--bg-card)',
                       boxShadow: '0 0 0 1px var(--border-main)',
                       flexShrink: 0,
                     }}
