@@ -2,8 +2,11 @@
 import {revalidatePath} from 'next/cache';
 import {requireUser} from '@/lib/auth';
 import {readUserRecords} from '@/lib/records';
-import {processAssistantRequest} from '@/lib/assistant-service';
-import type {AssistantState,Subject} from '@/lib/types';
+import {processAssistantRequest,takeQuota} from '@/lib/assistant-service';
+import {requestTimetable} from '@/lib/assistant';
+import {expandTimetable,parseTimetableReply} from '@/lib/timetable';
+import type {TimetableRow} from '@/lib/timetable';
+import type {ActionState,AssistantState,Subject} from '@/lib/types';
 
 export async function sendAssistantMessage(input:unknown):Promise<AssistantState> {
   const {supabase,user}=await requireUser();
@@ -14,4 +17,38 @@ export async function sendAssistantMessage(input:unknown):Promise<AssistantState
   } catch {return {ok:false,message:'Chưa đọc được môn học. Vui lòng tải lại hoặc đăng nhập lại.'};}
   if(result.created)for(const view of ['dashboard','subjects','tasks','calendar'])revalidatePath(`/${view}`);
   return result;
+}
+
+const imageTypes=['image/jpeg','image/png','image/webp'];
+export async function readTimetableImage(input:unknown):Promise<{ok:boolean;message:string;rows?:TimetableRow[]}> {
+  const {supabase,user}=await requireUser();
+  if(!process.env.GEMINI_API_KEY)return {ok:false,message:'Cần điền GEMINI_API_KEY trong .env.local rồi khởi động lại server.'};
+  const image=input&&typeof input==='object'?input as {mimeType?:unknown;data?:unknown}:{};
+  if(typeof image.mimeType!=='string'||!imageTypes.includes(image.mimeType)||typeof image.data!=='string'||!image.data||image.data.length>1_000_000||!/^[A-Za-z0-9+/]+={0,2}$/.test(image.data))
+    return {ok:false,message:'Ảnh không hợp lệ hoặc quá lớn. Hãy chọn ảnh JPG/PNG/WebP.'};
+  if(!takeQuota(user.id))return {ok:false,message:'Bạn đã gửi 10 yêu cầu trong một phút. Hãy chờ một chút rồi thử lại.'};
+  let subjects:Subject[];
+  try {subjects=await readUserRecords<Subject>(supabase,'subjects',user.id);}
+  catch {return {ok:false,message:'Chưa đọc được môn học. Vui lòng tải lại hoặc đăng nhập lại.'};}
+  try {
+    const rows=parseTimetableReply(await requestTimetable({mimeType:image.mimeType,data:image.data},subjects),subjects);
+    if(rows.length===0)return {ok:false,message:'Không tìm thấy buổi học nào trong ảnh. Hãy thử ảnh rõ hơn hoặc cắt sát bảng.'};
+    return {ok:true,message:`Đọc được ${rows.length} buổi/tuần. Kiểm tra lại trước khi lưu.`,rows};
+  } catch(error) {return {ok:false,message:error instanceof Error?error.message:'Gemini chưa đọc được ảnh.'};}
+}
+
+export async function saveTimetable(input:unknown):Promise<ActionState> {
+  const {supabase,user}=await requireUser();
+  let rows:Record<string,unknown>[];
+  try {
+    const subjects=await readUserRecords<Subject>(supabase,'subjects',user.id);
+    rows=expandTimetable(input,new Set(subjects.map(subject=>subject.id))).map(session=>({...session,user_id:user.id}));
+  } catch(error) {return {ok:false,message:error instanceof Error?error.message:'Dữ liệu nhập không hợp lệ.'};}
+  try {
+    // One insert statement, so PostgREST saves all sessions or none.
+    const {error}=await supabase.from('class_sessions').insert(rows);
+    if(error)return {ok:false,message:'Chưa lưu được lịch học. Chưa có buổi nào được tạo; vui lòng thử lại.'};
+  } catch {return {ok:false,message:'Mất kết nối. Chưa xác nhận được việc lưu; hãy tải lại trang để kiểm tra trước khi thử lại.'};}
+  for(const view of ['dashboard','subjects','tasks','calendar'])revalidatePath(`/${view}`);
+  return {ok:true,message:`Đã tạo ${rows.length} buổi học.`};
 }

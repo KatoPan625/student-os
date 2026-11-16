@@ -144,7 +144,7 @@ export function DashboardView({ data }: DashboardViewProps) {
                       <div className="item-left">
                         <span
                           className="badge badge-subject"
-                          style={{ backgroundColor: subject?.color || 'var(--charcoal)' }}
+                          style={{ backgroundColor: subject?.color || '#475569' }}
                         >
                           {subject?.code || subject?.name || 'Môn'}
                         </span>
@@ -198,7 +198,7 @@ export function DashboardView({ data }: DashboardViewProps) {
                       <div className="item-left">
                         <span
                           className="badge badge-subject"
-                          style={{ backgroundColor: subject?.color || 'var(--status-overdue-text)' }}
+                          style={{ backgroundColor: subject?.color || '#475569' }}
                         >
                           {subject?.code || subject?.name || 'Môn'}
                         </span>
@@ -262,7 +262,7 @@ export function DashboardView({ data }: DashboardViewProps) {
                       <div className="item-left">
                         <span
                           className="badge badge-subject"
-                          style={{ backgroundColor: subject?.color || 'var(--charcoal)' }}
+                          style={{ backgroundColor: subject?.color || '#475569' }}
                         >
                           {subject?.code || subject?.name || 'Môn'}
                         </span>
@@ -323,7 +323,7 @@ export function DashboardView({ data }: DashboardViewProps) {
                             width: '8px',
                             height: '8px',
                             borderRadius: '50%',
-                            backgroundColor: subject.color || 'var(--brown)',
+                            backgroundColor: subject.color || 'var(--primary)',
                             display: 'inline-block',
                           }}
                         />
@@ -350,7 +350,7 @@ export function DashboardView({ data }: DashboardViewProps) {
                         className="progress-fill"
                         style={{
                           width: `${percent ?? 0}%`,
-                          backgroundColor: subject.color || 'var(--brown)',
+                          backgroundColor: subject.color || 'var(--primary)',
                         }}
                       />
                     </div>

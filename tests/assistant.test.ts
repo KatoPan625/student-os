@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {validateAssistantInput,parseAssistantReply,requestAssistant} from '../src/lib/assistant.ts';
+import {validateAssistantInput,parseAssistantReply,requestAssistant,requestTimetable} from '../src/lib/assistant.ts';
 import type {Subject} from '../src/lib/types.ts';
 
 const id='11111111-1111-4111-8111-111111111111';
@@ -69,5 +69,23 @@ test('Gemini request uses private header, minimal subject data, schema and Vietn
     await assert.rejects(()=>requestAssistant([],subjects,new Date(),async()=>{throw new DOMException('timeout','TimeoutError');}));
     delete process.env.GEMINI_API_KEY;
     await assert.rejects(()=>requestAssistant([],subjects,new Date(),async()=>{throw new Error('must not call');}),/GEMINI_API_KEY/);
+  } finally {if(previous===undefined)delete process.env.GEMINI_API_KEY;else process.env.GEMINI_API_KEY=previous;}
+});
+
+test('timetable request sends the image inline with private header and a rows schema',async()=>{
+  const previous=process.env.GEMINI_API_KEY;
+  process.env.GEMINI_API_KEY='test-key-only';
+  try {
+    const reply={rows:[]};
+    const result=await requestTimetable({mimeType:'image/jpeg',data:'aGVsbG8='},subjects,async(url,options)=>{
+      assert.ok(!String(url).includes('test-key-only'));
+      assert.equal(new Headers(options?.headers).get('x-goog-api-key'),'test-key-only');
+      const body=JSON.parse(String(options?.body));
+      assert.deepEqual(body.contents[0].parts[0],{inlineData:{mimeType:'image/jpeg',data:'aGVsbG8='}});
+      assert.ok(body.generationConfig.responseSchema.properties.rows.items.properties.subject_id.enum.includes(id));
+      assert.ok(!String(options?.body).includes('private-owner'));
+      return Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify(reply)}]}}]});
+    });
+    assert.deepEqual(result,reply);
   } finally {if(previous===undefined)delete process.env.GEMINI_API_KEY;else process.env.GEMINI_API_KEY=previous;}
 });

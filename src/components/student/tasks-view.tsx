@@ -255,7 +255,7 @@ function TaskCard({
       <div className="task-card-header">
         <span
           className="badge badge-subject"
-          style={{ backgroundColor: subject?.color || 'var(--charcoal)' }}
+          style={{ backgroundColor: subject?.color || 'var(--ink)' }}
         >
           {subject?.code || subject?.name || 'Môn'}
         </span>

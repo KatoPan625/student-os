@@ -48,3 +48,24 @@ export function getDashboard(data: StudentData, now: Date) {
     }),
   };
 }
+
+export const MAX_REPEAT_WEEKS = 26;
+const WEEK = 7 * 86400000; // Vietnam has no DST, so a week is always exactly 7×24h.
+export function weeklySessions(starts_at: string, ends_at: string, untilKey: string): {starts_at: string; ends_at: string}[] {
+  const start = Date.parse(starts_at), length = Date.parse(ends_at) - start;
+  const last = Date.parse(toUtc(`${untilKey}T23:59`));
+  if (!Number.isFinite(start) || !(length > 0)) throw new Error('Giờ kết thúc phải sau giờ bắt đầu.');
+  if (last < start) throw new Error('Ngày kết thúc lặp phải từ ngày của buổi đầu tiên trở đi.');
+  const sessions: {starts_at: string; ends_at: string}[] = [];
+  for (let at = start; at <= last; at += WEEK) {
+    if (sessions.length === MAX_REPEAT_WEEKS) throw new Error(`Chỉ lặp tối đa ${MAX_REPEAT_WEEKS} tuần.`);
+    sessions.push({starts_at: new Date(at).toISOString(), ends_at: new Date(at + length).toISOString()});
+  }
+  return sessions;
+}
+/** ISO weekday: 1 = Thứ Hai … 7 = Chủ Nhật. */
+export function firstWeekdayOnOrAfter(dateKey: string, weekday: number): string {
+  const date = new Date(`${dateKey}T00:00:00Z`);
+  const offset = (weekday - ((date.getUTCDay() + 6) % 7 + 1) + 7) % 7;
+  return new Date(date.getTime() + offset * 86400000).toISOString().slice(0, 10);
+}

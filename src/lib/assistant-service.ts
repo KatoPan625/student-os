@@ -10,6 +10,16 @@ const limits=new Map<string,{count:number;expires:number}>();
 type RequestEntry={fingerprint:string;expires:number;result?:Promise<AssistantState>;command?:AssistantCommand};
 const requests=new Map<string,RequestEntry>();
 
+/** Shared per-user Gemini quota: 10 calls per minute. */
+export function takeQuota(userId:string,now=new Date()):boolean {
+  const time=now.getTime();
+  for(const [key,entry] of limits)if(entry.expires<=time)limits.delete(key);
+  const quota=limits.get(userId)??{count:0,expires:time+60000};
+  if(quota.count>=10)return false;
+  quota.count++;limits.set(userId,quota);
+  return true;
+}
+
 export async function saveAssistantRecord(client:SupabaseClient,userId:string,requestId:string,command:AssistantCommand):Promise<string> {
   const table=command.entity==='task'?'tasks':'class_sessions';
   const other=table==='tasks'?'class_sessions':'tasks';
@@ -42,16 +52,13 @@ export async function processAssistantRequest(input:unknown,authenticate:()=>Pro
   catch(error){return {ok:false,message:error instanceof Error?error.message:'Yêu cầu không hợp lệ.'};}
   const {requestId,messages}=validated;
   const time=now.getTime();
-  for(const [key,entry] of limits)if(entry.expires<=time)limits.delete(key);
   for(const [key,entry] of requests)if(entry.expires<=time)requests.delete(key);
   const key=`${userId}:${requestId}`;
   const fingerprint=JSON.stringify(messages);
   const previous=requests.get(key);
   if(previous&&previous.fingerprint!==fingerprint)return {ok:false,message:'Yêu cầu đã thay đổi. Hãy gửi thành một tin nhắn mới.'};
   if(previous?.result)return previous.result;
-  const quota=limits.get(userId)??{count:0,expires:time+60000};
-  if(quota.count>=10)return {ok:false,message:'Bạn đã gửi 10 yêu cầu trong một phút. Hãy chờ một chút rồi thử lại.'};
-  quota.count++;limits.set(userId,quota);
+  if(!takeQuota(userId,now))return {ok:false,message:'Bạn đã gửi 10 yêu cầu trong một phút. Hãy chờ một chút rồi thử lại.'};
   const entry:RequestEntry=previous??{fingerprint,expires:time+600000};
   const result=(async():Promise<AssistantState>=>{
     if(subjects.length===0)return {ok:true,message:'Bạn hãy tạo môn học trước trong mục Môn học, rồi mình sẽ thêm lịch hoặc deadline cho môn đó.'};

@@ -144,6 +144,17 @@ function SessionModalContent({
             />
           </label>
 
+          {!isEditing && (
+            <label className="form-field">
+              <span>Lặp hằng tuần đến ngày <small style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(tùy chọn, tối đa 26 tuần)</small></span>
+              <input
+                name="repeat_until"
+                type="date"
+                defaultValue={state.values?.repeat_until ?? ''}
+              />
+            </label>
+          )}
+
           {state.message && (
             <div
               className={`form-message ${state.ok ? 'success' : 'error'}`}

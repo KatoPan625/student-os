@@ -13,15 +13,16 @@ interface SubjectModalProps {
   subject?: Subject | null;
 }
 
+// Each preset keeps white badge text at WCAG AA (≥4.5:1).
 const COLOR_PRESETS = [
-  '#805f46', // Warm Brown
-  '#24211f', // Charcoal
-  '#5b6b58', // Sage
-  '#4a5d6e', // Slate Blue
-  '#8a5a54', // Muted Terracotta
-  '#73627a', // Muted Plum
-  '#6b6357', // Warm Taupe
-  '#3b5a61', // Muted Teal
+  '#0f766e', // Teal
+  '#1d4ed8', // Blue
+  '#6d28d9', // Violet
+  '#be185d', // Pink
+  '#b91c1c', // Red
+  '#b45309', // Amber
+  '#15803d', // Green
+  '#475569', // Slate
 ];
 
 export function SubjectModal(props: SubjectModalProps) {
@@ -29,7 +30,7 @@ export function SubjectModal(props: SubjectModalProps) {
 }
 
 function SubjectModalContent({ isOpen, onClose, subject }: SubjectModalProps) {
-  const [selectedColor, setSelectedColor] = useState(subject?.color || '#805f46');
+  const [selectedColor, setSelectedColor] = useState(subject?.color || COLOR_PRESETS[0]);
   const [state, action, pending] = useActionState<ActionState, FormData>(
     mutateStudentData,
     { ok: false, message: '' }
@@ -127,9 +128,9 @@ function SubjectModalContent({ isOpen, onClose, subject }: SubjectModalProps) {
                 pattern="^#[0-9a-fA-F]{6}$"
                 value={selectedColor}
                 onChange={(e) => setSelectedColor(e.target.value)}
-                placeholder="#805f46"
+                placeholder="#0f766e"
                 style={{ maxWidth: '130px' }}
-                title="Mã màu hex gồm 7 ký tự (vd: #805f46)"
+                title="Mã màu hex gồm 7 ký tự (vd: #0f766e)"
               />
             </div>
           </div>

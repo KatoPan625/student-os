@@ -78,4 +78,10 @@ Kiểm tra thủ công thêm: đăng ký/xác nhận email/reset mật khẩu, p
 
 Brief: `docs/ANTIGRAVITY.md`. Antigravity sở hữu `src/components/student/**` và `src/app/globals.css`; Codex sở hữu backend/auth/routes/config/test. Không sửa cùng file trong lúc bên kia đang làm. Không tự commit, push hoặc deploy.
 
-Chưa làm trong MVP: Pomodoro, ghi chú, email/Zalo nhắc deadline, lịch học lặp, kéo thả Kanban và quản lý nhóm.
+## Lịch lặp, nhập thời khóa biểu và xuất lịch
+
+- **Lặp hằng tuần:** khi tạo buổi học, điền “Lặp hằng tuần đến ngày” để tạo một buổi mỗi tuần cùng giờ, tối đa 26 tuần. Các buổi được tạo trong một lần ghi và là bản ghi độc lập; sửa/xóa vẫn theo từng buổi.
+- **Nhập TKB từ ảnh:** trang Lịch học → “Nhập TKB từ ảnh”. Chọn ngày bắt đầu/kết thúc học kỳ và ảnh; trình duyệt thu nhỏ ảnh (dưới giới hạn 1 MB của Server Action) rồi gửi tới Gemini. Môn không khớp hoặc giờ chỉ ghi “tiết” sẽ để trống để bạn chọn/điền trước khi lưu. Cần `GEMINI_API_KEY`; dùng chung hạn mức 10 yêu cầu/phút với chatbot. Ảnh không được lưu.
+- **Xuất .ics:** nút “Tải lịch (.ics)” tải `/calendar.ics` gồm buổi học và deadline chưa xong, để nhập vào Google Calendar/lịch điện thoại. Đây là file tải một lần (cần đăng nhập), chưa phải link đăng ký tự cập nhật.
+
+Chưa làm: Pomodoro, ghi chú, email/Zalo nhắc deadline, xóa cả chuỗi lịch lặp, link đăng ký lịch tự cập nhật, kéo thả Kanban và quản lý nhóm.

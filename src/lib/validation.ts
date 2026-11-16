@@ -6,7 +6,7 @@ type Command =
   | {entity: Entity; intent: 'delete'; id: string}
   | {entity: 'subject'; intent: 'save'; id?: string; values: {name: string; code: string | null; color: string}}
   | {entity: 'task'; intent: 'save'; id?: string; values: {subject_id: string; title: string; description: string | null; due_at: string; status: TaskStatus}}
-  | {entity: 'class_session'; intent: 'save'; id?: string; values: {subject_id: string; starts_at: string; ends_at: string; location: string | null}};
+  | {entity: 'class_session'; intent: 'save'; id?: string; values: {subject_id: string; starts_at: string; ends_at: string; location: string | null}; repeatUntil?: string};
 
 export function parseStudentForm(form: FormData): Command {
   const text = (name: string, max: number, required = false) => {
@@ -44,5 +44,7 @@ export function parseStudentForm(form: FormData): Command {
   const starts_at = toUtc(text('starts_at', 16, true));
   const ends_at = toUtc(text('ends_at', 16, true));
   if (ends_at <= starts_at) throw new Error('Giờ kết thúc phải sau giờ bắt đầu.');
-  return {entity, intent, id, values: {subject_id, starts_at, ends_at, location: text('location', 300) || null}};
+  const repeatUntil = text('repeat_until', 10) || undefined;
+  if (repeatUntil && id) throw new Error('Chỉ lặp lịch khi tạo buổi học mới.');
+  return {entity, intent, id, values: {subject_id, starts_at, ends_at, location: text('location', 300) || null}, ...(repeatUntil && {repeatUntil})};
 }
