@@ -15,7 +15,13 @@ const command=parsed.command;
 function database(fail=false,loseFirstResponse=false) {
   const rows:Record<string,Record<string,unknown>[]>= {tasks:[],class_sessions:[]};
   let writes=0;
-  const client={from(table:string){
+  // Stand-in for public.take_assistant_quota(): 10 per window; the real window logic is tested in SQL.
+  const quota={used:0,error:false as boolean};
+  const client={async rpc(name:string){
+    assert.equal(name,'take_assistant_quota');
+    if(quota.error)return {data:null,error:{message:'quota unavailable'}};
+    return {data:++quota.used<=10,error:null};
+  },from(table:string){
     const filters:Record<string,unknown>={};let payload:Record<string,unknown>|undefined;
     const query={
       select(){return query;},eq(key:string,value:unknown){filters[key]=value;return query;},
@@ -31,7 +37,7 @@ function database(fail=false,loseFirstResponse=false) {
       },
     };return query;
   }} as unknown as SupabaseClient;
-  return {client,rows,get writes(){return writes;}};
+  return {client,rows,quota,get writes(){return writes;}};
 }
 
 test('assistant create retries reuse one owner-scoped record and reject conflicting content',async()=>{
@@ -78,15 +84,19 @@ test('concurrent duplicate requests call Gemini and create only once; changed pa
   assert.equal(conflict.ok,false);assert.equal(calls,1);
 });
 
-test('rate limit is per account and expires without calling Gemini for blocked requests',async()=>{
+test('shared quota blocks Gemini once exhausted, recovers with a new window and fails closed on errors',async()=>{
   const db=database();let calls=0;
   const authenticate=async()=>({client:db.client,userId:'owner-limit',subjects});
   const requester=async()=>{calls++;return {type:'reply',message:'Bạn muốn chọn môn nào?'};};
   const makeInput=(n:number)=>({requestId:`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`,messages:[{role:'user',text:'Chào'}]});
-  for(let n=0;n<10;n++)assert.equal((await processAssistantRequest(makeInput(n),authenticate,requester,new Date(1000))).ok,true);
-  assert.equal((await processAssistantRequest(makeInput(10),authenticate,requester,new Date(1000))).ok,false);
+  for(let n=0;n<10;n++)assert.equal((await processAssistantRequest(makeInput(n),authenticate,requester)).ok,true);
+  assert.equal((await processAssistantRequest(makeInput(10),authenticate,requester)).ok,false);
   assert.equal(calls,10);
-  assert.equal((await processAssistantRequest(makeInput(11),authenticate,requester,new Date(62000))).ok,true);
+  db.quota.used=0; // the database window rolled over
+  assert.equal((await processAssistantRequest(makeInput(11),authenticate,requester)).ok,true);
+  assert.equal(calls,11);
+  db.quota.error=true;
+  assert.equal((await processAssistantRequest(makeInput(12),authenticate,requester)).ok,false);
   assert.equal(calls,11);
 });
 

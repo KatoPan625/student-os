@@ -2,7 +2,7 @@
 import {revalidatePath} from 'next/cache';
 import {requireUser} from '@/lib/auth';
 import {readUserRecords} from '@/lib/records';
-import {processAssistantRequest,takeQuota} from '@/lib/assistant-service';
+import {QUOTA_MESSAGE,processAssistantRequest,takeQuota} from '@/lib/assistant-service';
 import {buildSchedule,requestTimetable} from '@/lib/assistant';
 import {expandTimetable,parseTimetableReply} from '@/lib/timetable';
 import type {TimetableRow} from '@/lib/timetable';
@@ -30,7 +30,7 @@ export async function readTimetableImage(input:unknown):Promise<{ok:boolean;mess
   const image=input&&typeof input==='object'?input as {mimeType?:unknown;data?:unknown}:{};
   if(typeof image.mimeType!=='string'||!imageTypes.includes(image.mimeType)||typeof image.data!=='string'||!image.data||image.data.length>1_000_000||!/^[A-Za-z0-9+/]+={0,2}$/.test(image.data))
     return {ok:false,message:'Ảnh không hợp lệ hoặc quá lớn. Hãy chọn ảnh JPG/PNG/WebP.'};
-  if(!takeQuota(user.id))return {ok:false,message:'Bạn đã gửi 10 yêu cầu trong một phút. Hãy chờ một chút rồi thử lại.'};
+  if(!await takeQuota(supabase))return {ok:false,message:QUOTA_MESSAGE};
   let subjects:Subject[];
   try {subjects=await readUserRecords<Subject>(supabase,'subjects',user.id);}
   catch {return {ok:false,message:'Chưa đọc được môn học. Vui lòng tải lại hoặc đăng nhập lại.'};}

@@ -39,7 +39,17 @@ Mở “Trợ lý học tập” sau đăng nhập, nhập ví dụ “Thêm dea
 
 Nội dung hội thoại ngắn, id/tên/mã môn và **lịch 14 ngày tới** được gửi tới Google Gemini để xử lý. Lịch gồm tối đa 40 mục: deadline chưa xong đã quá hạn, deadline và buổi học trong 14 ngày (tên bài, môn, giờ, trạng thái, phòng); không gửi mô tả bài tập, id bản ghi, email hay token. Nhờ vậy có thể hỏi “Tuần này có gì?”, “Môn nào sắp trễ hạn?”; câu trả lời chỉ dựa trên danh sách đó. Chat chỉ giữ trong bộ nhớ tab. Gemini có thể hiểu sai ngày/giờ: kiểm tra thông tin đã tạo và sửa bằng biểu mẫu nếu cần. Không hỗ trợ sửa/xóa bằng chat, nhiều bản ghi trong một lượt hoặc lịch lặp.
 
-Giới hạn bản local: 2.000 ký tự/tin, 8 lượt ngữ cảnh, 10 yêu cầu/phút/tài khoản và timeout Gemini 20 giây. Rate limit và cache chống lặp dùng bộ nhớ process; cần shared limiter/deduplication trước khi deploy nhiều instance. Hạn mức/chi phí Gemini phụ thuộc project/key của bạn; không tự bật billing hay tạo tài nguyên trả phí.
+Giới hạn bản local: 2.000 ký tự/tin, 8 lượt ngữ cảnh, 10 yêu cầu/phút/tài khoản và timeout Gemini 20 giây. Hạn mức 10 yêu cầu/phút dùng chung cho chatbot và nhập TKB, lưu trong Postgres (`take_assistant_quota`, migration `202611160003_assistant_quota.sql`) nên đúng cả khi chạy nhiều instance; không kiểm tra được hạn mức thì từ chối gọi Gemini. Chống tạo trùng dựa trên mã yêu cầu trong database; cache trong process chỉ giúp thử lại không gọi Gemini lần nữa. Hạn mức/chi phí Gemini phụ thuộc project/key của bạn; không tự bật billing hay tạo tài nguyên trả phí.
+
+## Deploy lên Vercel
+
+1. Chạy theo thứ tự ba migration `202611160001…`, `…0002…`, `…0003…` trên project Supabase (đã chạy trên project hiện tại).
+2. Tạo project Vercel nối với repo GitHub; framework Next.js, Node 24. Production build từ nhánh `main`.
+3. Biến môi trường (Production và Preview): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_SITE_URL` (origin HTTPS của bản production, không có dấu `/` cuối), `GEMINI_MODEL` (tùy chọn). `GEMINI_API_KEY` tự nhập trong Vercel Dashboard, kiểu Sensitive, không đưa qua chat/Git.
+4. Supabase → Authentication → URL Configuration: Site URL = origin production; thêm redirect `https://<domain>/auth/callback` và `https://<domain>/auth/callback?next=/reset-password`. Giữ các URL local nếu còn chạy trên máy.
+5. Đổi biến `NEXT_PUBLIC_*` thì phải deploy lại (giá trị được nhúng lúc build).
+
+`next.config.ts` thêm header bảo mật cơ bản (nosniff, chặn nhúng iframe, Referrer-Policy, Permissions-Policy); chưa có CSP. CI GitHub Actions chạy test, lint, typecheck và build cho mỗi PR và khi push lên `main`.
 
 ## Kiểm tra
 
