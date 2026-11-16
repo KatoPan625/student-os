@@ -1803,6 +1803,105 @@ dialog.modal-backdrop:not([open]) {
   }
 }
 
+/* Kanban drag & drop */
+.task-card[draggable="true"] {
+  cursor: grab;
+}
+
+.task-card[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.kanban-column.drag-over {
+  border-color: var(--primary);
+  background-color: var(--primary-subtle);
+}
+
+.column-empty {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.75rem;
+  padding: 1.5rem 0;
+}
+
+/* Next up + focus timer */
+.next-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.next-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-surface);
+}
+
+.next-item .item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.next-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.focus-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.focus-card .card-header {
+  margin-bottom: 0;
+}
+
+.focus-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.focus-controls .form-field {
+  flex: 1;
+  min-width: 140px;
+}
+
+.focus-lengths {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.focus-lengths .btn {
+  min-height: 40px;
+}
+
+.focus-clock {
+  font-size: 3rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  text-align: center;
+  color: var(--ink);
+  line-height: 1.1;
+}
+
+.focus-actions {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 /* Timetable import */
 .modal-dialog-wide {
   max-width: 860px;

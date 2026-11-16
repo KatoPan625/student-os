@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useMemo, useState } from 'react';
+import { useActionState, useMemo, useOptimistic, useState, useTransition } from 'react';
 import { mutateStudentData } from '@/app/(student)/actions';
 import { formatDateTime, toLocalInput } from '@/lib/study';
 import type { ActionState, StudentData, Subject, Task, TaskStatus } from '@/lib/types';
@@ -37,10 +37,24 @@ export function TasksView({ data }: TasksViewProps) {
     return data.tasks.filter((t) => t.subject_id === selectedSubjectId);
   }, [data.tasks, selectedSubjectId]);
 
-  // Group by status
-  const todoTasks = useMemo(() => filteredTasks.filter((t) => t.status === 'todo'), [filteredTasks]);
-  const doingTasks = useMemo(() => filteredTasks.filter((t) => t.status === 'doing'), [filteredTasks]);
-  const doneTasks = useMemo(() => filteredTasks.filter((t) => t.status === 'done'), [filteredTasks]);
+  // Drag & drop moves a card instantly; the server result (or a rollback) follows.
+  const [optimisticTasks, moveTask] = useOptimistic(filteredTasks, (tasks, move: {id: string; status: TaskStatus}) =>
+    tasks.map((task) => (task.id === move.id ? {...task, status: move.status} : task)));
+  const [, startTransition] = useTransition();
+  const [dragOver, setDragOver] = useState<TaskStatus | null>(null);
+  const [moveError, setMoveError] = useState('');
+
+  const dropTask = (taskId: string, status: TaskStatus) => {
+    setDragOver(null);
+    const task = data.tasks.find((t) => t.id === taskId);
+    if (!task || task.status === status) return;
+    setMoveError('');
+    startTransition(async () => {
+      moveTask({id: task.id, status});
+      const result = await mutateStudentData({ok: false, message: ''}, taskForm(task, status));
+      if (!result.ok) setMoveError(`Chưa chuyển được “${task.title}”: ${result.message}`);
+    });
+  };
 
   const handleEdit = (task: Task) => {
     setEditingTask(task);
@@ -119,92 +133,57 @@ export function TasksView({ data }: TasksViewProps) {
           </div>
         </div>
       ) : (
-        /* Kanban Board: 3 Columns */
-        <div className="kanban-board">
-          {/* Column 1: To do */}
-          <section className="kanban-column" aria-labelledby="col-todo-title">
-            <div className="column-header">
-              <h2 id="col-todo-title" className="column-title">
-                <span>Cần làm</span>
-              </h2>
-              <span className="column-count">{todoTasks.length}</span>
-            </div>
+        <>
+          {moveError && <div className="form-message error" role="alert">{moveError}</div>}
+          <div className="kanban-board">
+            {COLUMNS.map((column) => {
+              const tasks = optimisticTasks.filter((t) => t.status === column.status);
+              return (
+                <section
+                  key={column.status}
+                  className={`kanban-column ${dragOver === column.status ? 'drag-over' : ''}`}
+                  aria-labelledby={`col-${column.status}-title`}
+                  onDragOver={(event) => {
+                    if (!event.dataTransfer.types.includes(TASK_MIME)) return;
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = 'move';
+                    setDragOver(column.status);
+                  }}
+                  onDragLeave={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragOver(null);
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    dropTask(event.dataTransfer.getData(TASK_MIME), column.status);
+                  }}
+                >
+                  <div className="column-header">
+                    <h2 id={`col-${column.status}-title`} className="column-title">
+                      <span>{column.title}</span>
+                    </h2>
+                    <span className="column-count">{tasks.length}</span>
+                  </div>
 
-            <div className="column-cards">
-              {todoTasks.length === 0 ? (
-                <p style={{ textAlign: 'center', color: 'var(--text-dim)', fontSize: '0.75rem', padding: '1.5rem 0' }}>
-                  Không có bài tập cần làm
-                </p>
-              ) : (
-                todoTasks.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    subject={subjectMap.get(task.subject_id)}
-                    onEdit={() => handleEdit(task)}
-                    onDelete={() => setDeletingTask(task)}
-                  />
-                ))
-              )}
-            </div>
-          </section>
-
-          {/* Column 2: Doing */}
-          <section className="kanban-column" aria-labelledby="col-doing-title">
-            <div className="column-header">
-              <h2 id="col-doing-title" className="column-title">
-                <span>Đang làm</span>
-              </h2>
-              <span className="column-count">{doingTasks.length}</span>
-            </div>
-
-            <div className="column-cards">
-              {doingTasks.length === 0 ? (
-                <p style={{ textAlign: 'center', color: 'var(--text-dim)', fontSize: '0.75rem', padding: '1.5rem 0' }}>
-                  Chưa có bài đang thực hiện
-                </p>
-              ) : (
-                doingTasks.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    subject={subjectMap.get(task.subject_id)}
-                    onEdit={() => handleEdit(task)}
-                    onDelete={() => setDeletingTask(task)}
-                  />
-                ))
-              )}
-            </div>
-          </section>
-
-          {/* Column 3: Done */}
-          <section className="kanban-column" aria-labelledby="col-done-title">
-            <div className="column-header">
-              <h2 id="col-done-title" className="column-title">
-                <span>Đã xong</span>
-              </h2>
-              <span className="column-count">{doneTasks.length}</span>
-            </div>
-
-            <div className="column-cards">
-              {doneTasks.length === 0 ? (
-                <p style={{ textAlign: 'center', color: 'var(--text-dim)', fontSize: '0.75rem', padding: '1.5rem 0' }}>
-                  Chưa có bài hoàn thành
-                </p>
-              ) : (
-                doneTasks.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    subject={subjectMap.get(task.subject_id)}
-                    onEdit={() => handleEdit(task)}
-                    onDelete={() => setDeletingTask(task)}
-                  />
-                ))
-              )}
-            </div>
-          </section>
-        </div>
+                  <div className="column-cards">
+                    {tasks.length === 0 ? (
+                      <p className="column-empty">{column.empty}</p>
+                    ) : (
+                      tasks.map((task) => (
+                        <TaskCard
+                          key={task.id}
+                          task={task}
+                          subject={subjectMap.get(task.subject_id)}
+                          onEdit={() => handleEdit(task)}
+                          onDelete={() => setDeletingTask(task)}
+                        />
+                      ))
+                    )}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {/* Task Modal */}
@@ -234,6 +213,23 @@ export function TasksView({ data }: TasksViewProps) {
   );
 }
 
+const TASK_MIME = 'application/x-student-os-task';
+const COLUMNS: {status: TaskStatus; title: string; empty: string}[] = [
+  {status: 'todo', title: 'Cần làm', empty: 'Không có bài tập cần làm'},
+  {status: 'doing', title: 'Đang làm', empty: 'Chưa có bài đang thực hiện'},
+  {status: 'done', title: 'Đã xong', empty: 'Chưa có bài hoàn thành'},
+];
+
+/** Same fields as the quick status buttons: the save action replaces the whole task. */
+function taskForm(task: Task, status: TaskStatus): FormData {
+  const form = new FormData();
+  for (const [key, value] of Object.entries({
+    entity: 'task', intent: 'save', id: task.id, subject_id: task.subject_id, title: task.title,
+    description: task.description ?? '', due_at: toLocalInput(task.due_at), status,
+  })) form.set(key, value);
+  return form;
+}
+
 // Individual Task Card Component with Accessible Quick Status Change Buttons
 function TaskCard({
   task,
@@ -251,11 +247,18 @@ function TaskCard({
   const isDone = task.status === 'done';
 
   return (
-    <article className="task-card">
+    <article
+      className="task-card"
+      draggable
+      onDragStart={(event) => {
+        event.dataTransfer.setData(TASK_MIME, task.id);
+        event.dataTransfer.effectAllowed = 'move';
+      }}
+    >
       <div className="task-card-header">
         <span
           className="badge badge-subject"
-          style={{ backgroundColor: subject?.color || 'var(--ink)' }}
+          style={{ backgroundColor: subject?.color || '#475569' }}
         >
           {subject?.code || subject?.name || 'Môn'}
         </span>
@@ -296,6 +299,7 @@ function TaskCard({
       <div className="task-card-footer">
         <div className="task-card-meta">
           <span>Hạn: {formatDateTime(task.due_at)}</span>
+          {task.priority === 'high' && !isDone && <span className="badge badge-doing">Ưu tiên cao</span>}
           {isOverdue && <span className="badge badge-overdue"><IconAlert /> Quá hạn</span>}
           {isDone && <span className="badge badge-done"><IconCheck /> Đã xong</span>}
         </div>

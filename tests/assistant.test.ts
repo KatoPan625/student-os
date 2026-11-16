@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {validateAssistantInput,parseAssistantReply,requestAssistant,requestTimetable} from '../src/lib/assistant.ts';
+import {buildSchedule,validateAssistantInput,parseAssistantReply,requestAssistant,requestTimetable} from '../src/lib/assistant.ts';
 import type {Subject} from '../src/lib/types.ts';
 
 const id='11111111-1111-4111-8111-111111111111';
@@ -87,5 +87,28 @@ test('timetable request sends the image inline with private header and a rows sc
       return Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify(reply)}]}}]});
     });
     assert.deepEqual(result,reply);
+  } finally {if(previous===undefined)delete process.env.GEMINI_API_KEY;else process.env.GEMINI_API_KEY=previous;}
+});
+
+test('schedule context keeps overdue and next-14-day items only, sorted, without ids or descriptions',async()=>{
+  const now=new Date('2026-11-16T00:00:00Z');
+  const task=(id:string,due_at:string,status:'todo'|'doing'|'done')=>({id,user_id:'private-owner',subject_id:id.startsWith('x')?'x':subjects[0].id,title:`T-${id}`,description:'secret notes',due_at,status,priority:'normal' as const,created_at:''});
+  const schedule=buildSchedule({subjects,classSessions:[
+    {id:'s1',user_id:'private-owner',subject_id:subjects[0].id,starts_at:'2026-11-17T01:00:00Z',ends_at:'2026-11-17T03:00:00Z',location:'B203',created_at:''},
+    {id:'s2',user_id:'private-owner',subject_id:subjects[0].id,starts_at:'2026-12-31T01:00:00Z',ends_at:'2026-12-31T03:00:00Z',location:null,created_at:''},
+  ],tasks:[task('late','2026-11-10T16:00:00Z','todo'),task('olddone','2026-11-10T16:00:00Z','done'),task('soon','2026-11-20T16:00:00Z','doing'),task('far','2026-12-20T16:00:00Z','todo')]},now);
+  assert.deepEqual(schedule,[
+    {loai:'deadline',mon:'Toán (MATH)',tieu_de:'T-late',han:'2026-11-10T23:00',trang_thai:'cần làm'},
+    {loai:'buoi_hoc',mon:'Toán (MATH)',bat_dau:'2026-11-17T08:00',ket_thuc:'2026-11-17T10:00',phong:'B203'},
+    {loai:'deadline',mon:'Toán (MATH)',tieu_de:'T-soon',han:'2026-11-20T23:00',trang_thai:'đang làm'},
+  ]);
+  assert.ok(!JSON.stringify(schedule).includes('secret')&&!JSON.stringify(schedule).includes('private-owner'));
+  const previous=process.env.GEMINI_API_KEY;
+  process.env.GEMINI_API_KEY='test-key-only';
+  try {
+    await requestAssistant(input.messages as [{role:'user';text:string}],subjects,now,async(_url,options)=>{
+      assert.match(JSON.parse(String(options?.body)).systemInstruction.parts[0].text,/T-soon/);
+      return Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({type:'reply',message:'ok'})}]}}]});
+    },schedule);
   } finally {if(previous===undefined)delete process.env.GEMINI_API_KEY;else process.env.GEMINI_API_KEY=previous;}
 });

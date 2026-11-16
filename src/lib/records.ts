@@ -1,6 +1,6 @@
 import type {SupabaseClient} from '@supabase/supabase-js';
 
-export async function readUserRecords<T>(client:SupabaseClient,table:'subjects'|'tasks'|'class_sessions',userId:string):Promise<T[]> {
+export async function readUserRecords<T>(client:SupabaseClient,table:'subjects'|'tasks'|'class_sessions'|'focus_sessions',userId:string):Promise<T[]> {
   const rows:T[]=[];
   let total=Infinity;
   while(rows.length<total) {

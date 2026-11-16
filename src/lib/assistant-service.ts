@@ -1,10 +1,10 @@
 import type {SupabaseClient} from '@supabase/supabase-js';
 import {AssistantError,parseAssistantReply,requestAssistant,validateAssistantInput} from './assistant.ts';
-import type {AssistantCommand} from './assistant.ts';
+import type {AssistantCommand,ScheduleItem} from './assistant.ts';
 import type {AssistantState,Subject} from './types.ts';
 import {formatDateTime} from './study.ts';
 
-type Context={client:SupabaseClient;userId:string;subjects:Subject[]};
+type Context={client:SupabaseClient;userId:string;subjects:Subject[];schedule?:ScheduleItem[]};
 // shortcut: process-local quotas/deduplication serve local use; add shared storage before multi-instance deployment.
 const limits=new Map<string,{count:number;expires:number}>();
 type RequestEntry={fingerprint:string;expires:number;result?:Promise<AssistantState>;command?:AssistantCommand};
@@ -46,7 +46,7 @@ export async function saveAssistantRecord(client:SupabaseClient,userId:string,re
 }
 
 export async function processAssistantRequest(input:unknown,authenticate:()=>Promise<Context>,requester:typeof requestAssistant=requestAssistant,now=new Date()):Promise<AssistantState> {
-  const {client,userId,subjects}=await authenticate();
+  const {client,userId,subjects,schedule=[]}=await authenticate();
   let validated:ReturnType<typeof validateAssistantInput>;
   try {validated=validateAssistantInput(input);}
   catch(error){return {ok:false,message:error instanceof Error?error.message:'Yêu cầu không hợp lệ.'};}
@@ -63,7 +63,7 @@ export async function processAssistantRequest(input:unknown,authenticate:()=>Pro
   const result=(async():Promise<AssistantState>=>{
     if(subjects.length===0)return {ok:true,message:'Bạn hãy tạo môn học trước trong mục Môn học, rồi mình sẽ thêm lịch hoặc deadline cho môn đó.'};
     let parsed:ReturnType<typeof parseAssistantReply>;
-    try {parsed=entry.command?{type:'create',command:entry.command}:parseAssistantReply(await requester(messages,subjects,now),subjects);}
+    try {parsed=entry.command?{type:'create',command:entry.command}:parseAssistantReply(await requester(messages,subjects,now,fetch,schedule),subjects);}
     catch(error) {return {ok:false,message:error instanceof AssistantError?error.message:'Gemini trả thông tin chưa hợp lệ. Hãy bổ sung rõ môn, ngày và giờ rồi thử lại.'};}
     if(parsed.type==='reply')return {ok:true,message:parsed.message};
     entry.command=parsed.command;

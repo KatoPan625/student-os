@@ -14,7 +14,7 @@ function fold(line:string):string {
 }
 
 /** Builds an iCalendar file of class sessions and unfinished deadlines. */
-export function buildIcs(data:StudentData,now=new Date()):string {
+export function buildIcs(data:Pick<StudentData,'subjects'|'tasks'|'classSessions'>,now=new Date()):string {
   const names=new Map(data.subjects.map(subject=>[subject.id,subject.code?`${subject.name} (${subject.code})`:subject.name]));
   const created=stamp(now.toISOString());
   const events=[

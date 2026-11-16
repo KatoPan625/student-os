@@ -66,9 +66,9 @@ test('timetable expands from the first matching weekday and validates every row'
 });
 
 test('ICS export escapes text, skips done tasks and folds long lines without breaking UTF-8',()=>{
-  const data:StudentData={subjects,classSessions:[{id:'s1',user_id:'u',subject_id:id,starts_at:'2026-11-16T01:00:00Z',ends_at:'2026-11-16T03:00:00Z',location:'Phòng A, tầng 2; cơ sở 1',created_at:''}],
-    tasks:[{id:'t1',user_id:'u',subject_id:id,title:'Bài '+'dài '.repeat(30),description:'Dòng 1\nDòng 2',due_at:'2026-11-20T16:00:00Z',status:'todo',created_at:''},
-      {id:'t2',user_id:'u',subject_id:id,title:'Đã xong',description:null,due_at:'2026-11-20T16:00:00Z',status:'done',created_at:''}]};
+  const data:StudentData={subjects,focusSessions:[],classSessions:[{id:'s1',user_id:'u',subject_id:id,starts_at:'2026-11-16T01:00:00Z',ends_at:'2026-11-16T03:00:00Z',location:'Phòng A, tầng 2; cơ sở 1',created_at:''}],
+    tasks:[{id:'t1',user_id:'u',subject_id:id,title:'Bài '+'dài '.repeat(30),description:'Dòng 1\nDòng 2',due_at:'2026-11-20T16:00:00Z',status:'todo',priority:'normal',created_at:''},
+      {id:'t2',user_id:'u',subject_id:id,title:'Đã xong',description:null,due_at:'2026-11-20T16:00:00Z',status:'done',priority:'normal',created_at:''}]};
   const ics=buildIcs(data,new Date('2026-11-16T00:00:00Z'));
   assert.ok(ics.startsWith('BEGIN:VCALENDAR\r\n')&&ics.endsWith('END:VCALENDAR\r\n'));
   assert.match(ics,/DTSTART:20261116T010000Z/);

@@ -1,11 +1,11 @@
 import { toUtc } from './study.ts';
-import type { TaskStatus } from './types.ts';
+import type { TaskPriority, TaskStatus } from './types.ts';
 
 type Entity = 'subject' | 'task' | 'class_session';
 type Command =
   | {entity: Entity; intent: 'delete'; id: string}
   | {entity: 'subject'; intent: 'save'; id?: string; values: {name: string; code: string | null; color: string}}
-  | {entity: 'task'; intent: 'save'; id?: string; values: {subject_id: string; title: string; description: string | null; due_at: string; status: TaskStatus}}
+  | {entity: 'task'; intent: 'save'; id?: string; values: {subject_id: string; title: string; description: string | null; due_at: string; status: TaskStatus; priority?: TaskPriority}}
   | {entity: 'class_session'; intent: 'save'; id?: string; values: {subject_id: string; starts_at: string; ends_at: string; location: string | null}; repeatUntil?: string};
 
 export function parseStudentForm(form: FormData): Command {
@@ -39,7 +39,10 @@ export function parseStudentForm(form: FormData): Command {
   if (entity === 'task') {
     const status = text('status', 10, true);
     if (status !== 'todo' && status !== 'doing' && status !== 'done') throw new Error('Trạng thái không hợp lệ.');
-    return {entity, intent, id, values: {subject_id, title: text('title', 240, true), description: text('description', 10000) || null, due_at: toUtc(text('due_at', 16, true)), status}};
+    // Priority is optional so status-only forms (quick buttons, drag & drop) keep the stored value.
+    const priority = text('priority', 10) as TaskPriority | '';
+    if (priority && priority !== 'low' && priority !== 'normal' && priority !== 'high') throw new Error('Độ ưu tiên không hợp lệ.');
+    return {entity, intent, id, values: {subject_id, title: text('title', 240, true), description: text('description', 10000) || null, due_at: toUtc(text('due_at', 16, true)), status, ...(priority && {priority})}};
   }
   const starts_at = toUtc(text('starts_at', 16, true));
   const ends_at = toUtc(text('ends_at', 16, true));

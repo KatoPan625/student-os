@@ -27,3 +27,7 @@ export async function saveTimetable():Promise<ActionState> {
   await new Promise(resolve=>setTimeout(resolve,30));
   return {ok:false,message:'Lỗi thử nghiệm: chưa lưu dữ liệu.'};
 }
+export async function logFocusSession():Promise<ActionState> {
+  await new Promise(resolve=>setTimeout(resolve,30));
+  return {ok:false,message:'Lỗi thử nghiệm: chưa lưu phiên tập trung.'};
+}
