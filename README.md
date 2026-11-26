@@ -1,7 +1,7 @@
 # Student OS
 
 Dashboard học tập cá nhân bằng Next.js App Router, TypeScript và Supabase. Giao diện tiếng Việt, thời gian Asia/Ho_Chi_Minh (UTC+7).
-
+Website:https://panstudentos.vercel.app
 ## Chạy trên máy
 
 Yêu cầu Node.js 24 trở lên và npm. Dùng npm nhất quán với package-lock.json.
